@@ -191,20 +191,42 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p className="footer-text">Developed by Asad Ali</p>
-        <div className="footer-links">
-          <a href="https://github.com/ali48293" target="_blank" rel="noopener noreferrer" title="GitHub">
-            <GithubIcon size={18} />
-          </a>
-          <a href="mailto:asadalidev200@gmail.com" title="Email">
-            <Mail size={18} />
-          </a>
-          <a href="https://www.linkedin.com/in/asad-ali-21197a177/" target="_blank" rel="noopener noreferrer" title="LinkedIn">
-            <LinkedinIcon size={18} />
-          </a>
-          <a href="https://divine-play-838786.framer.app/asad's" target="_blank" rel="noopener noreferrer" title="Portfolio">
-            <Globe size={18} />
-          </a>
+        <div className="seo-content">
+          <div className="seo-column">
+            <h3>How to Sign a PDF Locally</h3>
+            <p>Signing a PDF has never been easier. Simply drag and drop your document into our secure workspace, right-click anywhere to place your signature, and download the finished file. No account required, and everything happens instantly in your browser.</p>
+          </div>
+          <div className="seo-column">
+            <h3>Is it Safe to Sign PDFs Online?</h3>
+            <p>Yes! Unlike other PDF tools that upload your sensitive documents to remote servers, SignifyPDF processes everything <strong>100% locally</strong> on your computer. Your files never touch our servers, guaranteeing maximum privacy and security.</p>
+          </div>
+          <div className="seo-column">
+            <h3>Free Premium PDF Signer</h3>
+            <p>SignifyPDF is a premium, open-source tool designed to give you a flawless signing experience without subscriptions, hidden fees, or watermarks. Draw your signature naturally with our trackpad-friendly canvas and drag it perfectly into position.</p>
+          </div>
+        </div>
+        
+        <div className="footer-bottom">
+          <p className="footer-text">Developed by Asad Ali</p>
+          <div className="footer-links">
+            <a href="https://github.com/ali48293" target="_blank" rel="noopener noreferrer" title="GitHub">
+              <GithubIcon size={18} />
+            </a>
+            <a href="mailto:asadalidev200@gmail.com" title="Email">
+              <Mail size={18} />
+            </a>
+            <a href="https://www.linkedin.com/in/asad-ali-21197a177/" target="_blank" rel="noopener noreferrer" title="LinkedIn">
+              <LinkedinIcon size={18} />
+            </a>
+            <a href="https://divine-play-838786.framer.app/asad's" target="_blank" rel="noopener noreferrer" title="Portfolio">
+              <Globe size={18} />
+            </a>
+          </div>
+          <div className="footer-legal">
+            <a href="/privacy-policy.html">Privacy Policy</a>
+            <span>&middot;</span>
+            <a href="/terms-of-service.html">Terms of Service</a>
+          </div>
         </div>
       </footer>
 

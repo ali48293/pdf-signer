@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Sensitive deployment files - DO NOT COMMIT
+*.pem
+deploy_new_instance.sh
+new_instance_ip.txt
+
+# Media artifacts
+*.webp
