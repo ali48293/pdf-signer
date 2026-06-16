@@ -26,65 +26,98 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({ isOpen, onClose,
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear and set up styling
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     isDirtyRef.current = false;
-    
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#000000';
 
-    let isDrawing = false;
-    let lastX = 0;
-    let lastY = 0;
-
-    const toggleDrawing = (e: MouseEvent) => {
-      isDrawing = !isDrawing;
-      if (isDrawing) {
-        const rect = canvas.getBoundingClientRect();
-        lastX = e.clientX - rect.left;
-        lastY = e.clientY - rect.top;
-      }
-    };
-
-    const stopDrawing = () => {
-      isDrawing = false;
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDrawing) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
+    // ── Shared draw helper (must be defined FIRST) ──────────────────
+    const drawLine = (x1: number, y1: number, x2: number, y2: number) => {
       ctx.globalCompositeOperation = isEraserRef.current ? 'destination-out' : 'source-over';
       ctx.lineWidth = isEraserRef.current ? 20 : 3;
-
       ctx.beginPath();
-      ctx.moveTo(lastX, lastY);
-      ctx.lineTo(x, y);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
-
-      lastX = x;
-      lastY = y;
       isDirtyRef.current = true;
     };
 
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault(); // Prevent right-click menu so user can right-click to toggle
+    // ── MOUSE support (desktop) ─────────────────────────────────────
+    let isMouseDrawing = false;
+    let lastMX = 0;
+    let lastMY = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      isMouseDrawing = true;
+      const rect = canvas.getBoundingClientRect();
+      lastMX = (e.clientX - rect.left) * (canvas.width / rect.width);
+      lastMY = (e.clientY - rect.top) * (canvas.height / rect.height);
     };
 
-    canvas.addEventListener('mousedown', toggleDrawing);
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseleave', stopDrawing);
-    canvas.addEventListener('contextmenu', handleContextMenu);
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isMouseDrawing) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      drawLine(lastMX, lastMY, x, y);
+      lastMX = x;
+      lastMY = y;
+    };
+
+    const onMouseUp = () => { isMouseDrawing = false; };
+    const onMouseLeave = () => { isMouseDrawing = false; };
+    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+
+    // ── TOUCH support (mobile) ──────────────────────────────────────
+    let lastTX = 0;
+    let lastTY = 0;
+
+    const getTouchCoords = (touch: Touch) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (touch.clientX - rect.left) * (canvas.width / rect.width),
+        y: (touch.clientY - rect.top) * (canvas.height / rect.height),
+      };
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      const { x, y } = getTouchCoords(e.touches[0]);
+      lastTX = x;
+      lastTY = y;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const { x, y } = getTouchCoords(e.touches[0]);
+      drawLine(lastTX, lastTY, x, y);
+      lastTX = x;
+      lastTY = y;
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('mouseleave', onMouseLeave);
+    canvas.addEventListener('contextmenu', onContextMenu);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
 
     return () => {
-      canvas.removeEventListener('mousedown', toggleDrawing);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseleave', stopDrawing);
-      canvas.removeEventListener('contextmenu', handleContextMenu);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('mouseleave', onMouseLeave);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
     };
   }, [isOpen]);
 
@@ -102,12 +135,9 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({ isOpen, onClose,
   const handleSave = () => {
     const canvas = canvasRef.current;
     if (!canvas || !isDirtyRef.current) {
-      alert("Please provide a signature first.");
+      alert('Please draw your signature first.');
       return;
     }
-    
-    // Trim functionality can be complex, but we will just save the whole canvas for now.
-    // The signature scaling is handled in the util.
     const dataUrl = canvas.toDataURL('image/png');
     onSave(dataUrl);
   };
@@ -118,24 +148,28 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({ isOpen, onClose,
     }}>
       <div className="modal-content">
         <div className="modal-header">
-          <h2 className="modal-title">Draw your signature (Click to start/stop drawing)</h2>
+          <h2 className="modal-title">Draw your signature</h2>
           <button className="close-btn" onClick={onClose} aria-label="Close">
             <X size={20} />
           </button>
         </div>
-        
+
+        <p className="modal-hint">
+          Desktop: click &amp; drag &nbsp;·&nbsp; Mobile: draw with your finger
+        </p>
+
         <div className="signature-pad-container" style={{ cursor: isEraser ? 'cell' : 'crosshair' }}>
-          <canvas 
+          <canvas
             ref={canvasRef}
             width={450}
             height={200}
-            style={{ display: 'block' }}
+            style={{ display: 'block', width: '100%', height: 'auto', touchAction: 'none' }}
           />
         </div>
 
         <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button 
+            <button
               className="btn btn-secondary"
               style={{ background: !isEraser ? 'var(--card-border)' : '' }}
               onClick={() => setEraserMode(false)}
@@ -143,7 +177,7 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({ isOpen, onClose,
             >
               <Pen size={16} />
             </button>
-            <button 
+            <button
               className="btn btn-secondary"
               style={{ background: isEraser ? 'var(--card-border)' : '' }}
               onClick={() => setEraserMode(true)}

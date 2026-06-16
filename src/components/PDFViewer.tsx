@@ -14,7 +14,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ file, onRightClick, onUpda
   const [numPages, setNumPages] = useState<number>(0);
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   useEffect(() => {
     const loadPdf = async () => {
       try {
@@ -41,12 +41,12 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({ file, onRightClick, onUpda
   }
 
   return (
-    <div className="pdf-workspace">
+    <div className="pdf-pages-container">
       {Array.from({ length: numPages }, (_, i) => (
-        <PDFPage 
-          key={i} 
-          pageIndex={i} 
-          pdfDoc={pdfDoc} 
+        <PDFPage
+          key={i}
+          pageIndex={i}
+          pdfDoc={pdfDoc}
           onRightClick={onRightClick}
           onUpdateSignature={onUpdateSignature}
           signatures={signatures.filter(s => s.pageIndex === i)}
@@ -66,6 +66,8 @@ interface PDFPageProps {
 
 const PDFPage: React.FC<PDFPageProps> = ({ pageIndex, pdfDoc, onRightClick, onUpdateSignature, signatures }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchMoved = useRef(false);
 
   useEffect(() => {
     let renderTask: any = null;
@@ -74,131 +76,189 @@ const PDFPage: React.FC<PDFPageProps> = ({ pageIndex, pdfDoc, onRightClick, onUp
     const renderPage = async () => {
       if (!canvasRef.current) return;
       const page = await pdfDoc.getPage(pageIndex + 1);
-      
-      let scale = 1.5;
+
+      // Responsive scale: fit container width on mobile, fixed 1.5 on desktop
+      const container = canvasRef.current.parentElement;
+      const containerWidth = container?.clientWidth ?? window.innerWidth;
+      const unscaled = page.getViewport({ scale: 1, rotation: 0 });
+      const desktopScale = 1.5;
+      const mobileScale = (containerWidth - 8) / unscaled.width;
+      const isMobile = window.innerWidth <= 768;
+      const scale = isMobile ? Math.min(desktopScale, mobileScale) : desktopScale;
+
       const viewport = page.getViewport({ scale, rotation: 0 });
-      
+
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       if (!context) return;
-      
+
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
       if (isCancelled) return;
 
-      renderTask = page.render({
-        canvasContext: context,
-        viewport: viewport,
-      });
-
+      renderTask = page.render({ canvasContext: context, viewport });
       try {
         await renderTask.promise;
       } catch (err: any) {
-        if (err?.name !== 'RenderingCancelledException') {
-          console.error('Render error:', err);
-        }
+        if (err?.name !== 'RenderingCancelledException') console.error('Render error:', err);
       }
     };
 
     renderPage();
-
     return () => {
       isCancelled = true;
-      if (renderTask) {
-        renderTask.cancel();
-      }
+      if (renderTask) renderTask.cancel();
     };
   }, [pageIndex, pdfDoc]);
 
+  // ── Desktop: right-click to place signature ──────────────────────
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
+    // Scale mouse coords to internal canvas coords
+    const scaleX = canvasRef.current.width / rect.width;
+    const scaleY = canvasRef.current.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     onRightClick(pageIndex, x, y, canvasRef.current.width, canvasRef.current.height);
   };
 
+  // ── Mobile: long-press (500ms) to place signature ────────────────
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    touchMoved.current = false;
+    const touch = e.touches[0];
+
+    longPressTimer.current = setTimeout(() => {
+      if (touchMoved.current) return; // cancelled if finger moved (scroll)
+      if (!canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const scaleX = canvasRef.current.width / rect.width;
+      const scaleY = canvasRef.current.height / rect.height;
+      const x = (touch.clientX - rect.left) * scaleX;
+      const y = (touch.clientY - rect.top) * scaleY;
+      if (navigator.vibrate) navigator.vibrate(40);
+      onRightClick(pageIndex, x, y, canvasRef.current.width, canvasRef.current.height);
+    }, 500);
+  };
+
+  const handleTouchMove = () => {
+    touchMoved.current = true;
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
   return (
-    <div className="pdf-canvas-container" onContextMenu={handleContextMenu}>
+    <div
+      className="pdf-canvas-container"
+      onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <canvas ref={canvasRef} className="pdf-canvas" />
-      {/* Overlay signatures for this page */}
       {signatures.map((sig) => (
-        <DraggableSignature 
-          key={sig.id} 
-          sig={sig} 
-          onUpdate={(id, x, y) => onUpdateSignature(id, x, y)} 
+        <DraggableSignature
+          key={sig.id}
+          sig={sig}
+          onUpdate={(id, x, y) => onUpdateSignature(id, x, y)}
         />
       ))}
     </div>
   );
 };
 
-const DraggableSignature = ({ 
-  sig, 
-  onUpdate 
-}: { 
-  sig: { id: string; x: number; y: number; dataUrl: string }, 
-  onUpdate: (id: string, x: number, y: number) => void 
+const DraggableSignature = ({
+  sig,
+  onUpdate,
+}: {
+  sig: { id: string; x: number; y: number; dataUrl: string };
+  onUpdate: (id: string, x: number, y: number) => void;
 }) => {
   const [pos, setPos] = useState({ x: sig.x, y: sig.y });
   const [isDragging, setIsDragging] = useState(false);
 
-  // Sync prop changes if they happen externally
   useEffect(() => {
     setPos({ x: sig.x, y: sig.y });
   }, [sig.x, sig.y]);
 
+  // ── Mouse drag (desktop) ─────────────────────────────────────────
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only left click for dragging
-    e.stopPropagation(); // Prevent right-click menu or placing new signatures under it
-    
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startPosX = pos.x;
-    const startPosY = pos.y;
-    
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const startX = e.clientX, startY = e.clientY;
+    const startPosX = pos.x, startPosY = pos.y;
     setIsDragging(true);
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      setPos({
-        x: startPosX + (moveEvent.clientX - startX),
-        y: startPosY + (moveEvent.clientY - startY)
-      });
-    };
+    const onMove = (ev: MouseEvent) =>
+      setPos({ x: startPosX + (ev.clientX - startX), y: startPosY + (ev.clientY - startY) });
 
-    const handleMouseUp = (upEvent: MouseEvent) => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
       setIsDragging(false);
-      
-      const finalX = startPosX + (upEvent.clientX - startX);
-      const finalY = startPosY + (upEvent.clientY - startY);
-      onUpdate(sig.id, finalX, finalY);
+      onUpdate(sig.id, startPosX + (ev.clientX - startX), startPosY + (ev.clientY - startY));
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // ── Touch drag (mobile) ──────────────────────────────────────────
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation(); // don't trigger page long-press
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const startX = touch.clientX, startY = touch.clientY;
+    const startPosX = pos.x, startPosY = pos.y;
+    setIsDragging(true);
+
+    const onTouchMove = (ev: TouchEvent) => {
+      ev.preventDefault();
+      const t = ev.touches[0];
+      setPos({ x: startPosX + (t.clientX - startX), y: startPosY + (t.clientY - startY) });
+    };
+
+    const onTouchEnd = (ev: TouchEvent) => {
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      setIsDragging(false);
+      const t = ev.changedTouches[0];
+      onUpdate(sig.id, startPosX + (t.clientX - startX), startPosY + (t.clientY - startY));
+    };
+
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
   };
 
   return (
-    <img 
+    <img
       src={sig.dataUrl}
       className="placed-signature"
-      style={{ 
-        left: pos.x, 
+      style={{
+        left: pos.x,
         top: pos.y,
         width: '150px',
         height: 'auto',
         cursor: isDragging ? 'grabbing' : 'grab',
         opacity: isDragging ? 0.8 : 1,
-        // center the image origin to the point just like before
-        transform: 'translate(-50%, -50%)'
+        transform: 'translate(-50%, -50%)',
+        touchAction: 'none',
       }}
       alt="signature"
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
       draggable={false}
     />
   );

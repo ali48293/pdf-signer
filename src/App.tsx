@@ -33,6 +33,7 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfWorkspaceRef = useRef<HTMLDivElement>(null);
 
   const processFile = (file?: File) => {
     if (file && file.type === 'application/pdf') {
@@ -65,6 +66,15 @@ function App() {
 
   const handleRightClick = (pageIndex: number, x: number, y: number, width: number, height: number) => {
     setPendingLocation({ pageIndex, x, y, width, height });
+    setIsModalOpen(true);
+  };
+
+  // Mobile: open modal with a default center-page location
+  const handleMobileTapToSign = () => {
+    const canvas = pdfWorkspaceRef.current?.querySelector('canvas');
+    const width = canvas?.width ?? 600;
+    const height = canvas?.height ?? 800;
+    setPendingLocation({ pageIndex: 0, x: width / 2, y: height / 2, width, height });
     setIsModalOpen(true);
   };
 
@@ -164,10 +174,10 @@ function App() {
             />
             <UploadCloud className="upload-icon" />
             <h2 className="upload-title">Drop your document here</h2>
-            <p className="upload-subtitle">or click to browse from your computer (PDF only)</p>
+            <p className="upload-subtitle">or tap to browse from your device (PDF only)</p>
           </div>
         ) : (
-          <div className="pdf-workspace">
+          <div className="pdf-workspace" ref={pdfWorkspaceRef}>
             <div className="controls">
               <FileText size={20} color="var(--accent-color)" />
               <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{pdfFile.name}</span>
@@ -176,9 +186,19 @@ function App() {
               </span>
             </div>
             
-            <p className="instruction-text">
-              Tip: Right-click anywhere on the document to place a signature. You can drag placed signatures to reposition them.
+            <p className="instruction-text desktop-hint">
+              💡 <strong>Tip:</strong> Right-click anywhere on the document to place a signature. Drag to reposition.
             </p>
+            <p className="instruction-text mobile-hint">
+              💡 Long-press on the document to place a signature, or tap the button below.
+            </p>
+            {/* Mobile-only Tap to Sign button */}
+            <button
+              className="btn mobile-sign-btn"
+              onClick={handleMobileTapToSign}
+            >
+              ✍️ Tap to Sign
+            </button>
 
             <PDFViewer 
               file={pdfFile} 
