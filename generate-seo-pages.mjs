@@ -244,7 +244,7 @@ function generatePage(p) {
 </head>
 <body>
 <header class="site-header">
-  <a href="/" class="logo">✍️ SignifyPDF</a>
+  <a href="/" class="logo">SignifyPDF</a>
   <a href="/" class="cta">Sign PDF Free →</a>
 </header>
 <div class="hero">
@@ -323,7 +323,7 @@ const blogHtml = `<!DOCTYPE html>
 </head>
 <body>
 <header class="site-header">
-  <a href="/" class="logo">✍️ SignifyPDF</a>
+  <a href="/" class="logo">SignifyPDF</a>
   <a href="/" class="cta">Sign PDF Free →</a>
 </header>
 <div class="hero">
